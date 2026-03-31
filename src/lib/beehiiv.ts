@@ -4,7 +4,9 @@ export type SubscribeResult =
   | { ok: true; status: number }
   | { ok: false; status: number; body: string };
 
-export async function createSubscription(
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function createSubscriptionOnce(
   apiKey: string,
   publicationId: string,
   email: string,
@@ -39,4 +41,39 @@ export async function createSubscription(
   }
 
   return { ok: false, status: res.status, body: text };
+}
+
+export async function createSubscription(
+  apiKey: string,
+  publicationId: string,
+  email: string,
+  opts: { utm_source?: string; utm_medium?: string; reactivate_existing?: boolean }
+): Promise<SubscribeResult> {
+  const maxRetries = 3;
+  let lastResult: SubscribeResult = { ok: false, status: 0, body: "no attempt" };
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    if (attempt > 0) {
+      // exponential backoff: 2s, 4s
+      await sleep(2000 * attempt);
+    }
+
+    const result = await createSubscriptionOnce(apiKey, publicationId, email, opts);
+
+    if (result.ok) return result;
+
+    // retry on rate limit or server error
+    if (result.status === 429 || result.status >= 500) {
+      if (result.status === 429) {
+        await sleep(3000);
+      }
+      lastResult = result;
+      continue;
+    }
+
+    // non-retryable error
+    return result;
+  }
+
+  return lastResult;
 }

@@ -9,6 +9,8 @@ export type ProcessBandcampResult = {
   errors: string[];
 };
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 export async function processBandcampSalesWindow(
   accessToken: string,
   bandId: number,
@@ -32,12 +34,16 @@ export async function processBandcampSalesWindow(
     errors: [],
   };
 
-  for (const line of report) {
+  for (let i = 0; i < report.length; i++) {
+    const line = report[i];
     const email = line.buyer_email;
     if (typeof email !== "string" || !email.trim()) {
       result.skippedNoEmail += 1;
       continue;
     }
+
+    // throttle: 300ms between calls (~3 req/s, well under Beehiiv limits)
+    if (i > 0) await sleep(300);
 
     const sub = await subscribeWithSource(email, "bandcamp");
     if (sub.ok) {
