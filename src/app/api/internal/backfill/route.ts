@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getBandcampAccessToken } from "@/lib/bandcampAuth";
 import { formatBandcampUtcTime } from "@/lib/bandcamp";
 import { processBandcampSalesWindow } from "@/lib/processBandcamp";
 import { setBandcampLastEndTime, redisConfigured } from "@/lib/state";
@@ -16,7 +17,6 @@ function parseBandId(raw: string | undefined): number | null {
 type Body = {
   start_time?: string;
   end_time?: string;
-  /** If true, set incremental cursor to end_time after success (default true) */
   advance_cursor?: boolean;
 };
 
@@ -25,11 +25,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const token = process.env.BANDCAMP_ACCESS_TOKEN;
   const bandId = parseBandId(process.env.BANDCAMP_BAND_ID);
-  if (!token || bandId == null) {
+  if (bandId == null) {
+    return NextResponse.json({ error: "missing BANDCAMP_BAND_ID" }, { status: 500 });
+  }
+
+  let token: string;
+  try {
+    token = await getBandcampAccessToken();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json(
-      { error: "missing BANDCAMP_ACCESS_TOKEN or BANDCAMP_BAND_ID" },
+      { error: "bandcamp_auth_failed", detail: msg },
       { status: 500 }
     );
   }

@@ -18,8 +18,9 @@ Node/TypeScript subscriber sync for [Vercel](https://vercel.com): polls **Bandca
    |---|---|
    | `BEEHIIV_API_KEY` | Beehiiv API key (Settings → API) |
    | `BEEHIIV_PUBLICATION_ID` | Publication UUID |
-   | `BANDCAMP_ACCESS_TOKEN` | OAuth Bearer token from Bandcamp |
-   | `BANDCAMP_BAND_ID` | Numeric band/label id ([my_bands](https://bandcamp.com/developer/account)) |
+   | `BANDCAMP_CLIENT_ID`, `BANDCAMP_CLIENT_SECRET` | From Bandcamp **API Access** — the app exchanges these for access tokens automatically (recommended) |
+   | `BANDCAMP_ACCESS_TOKEN` | Optional legacy static token; omit if using Client ID + Secret |
+   | `BANDCAMP_BAND_ID` | Numeric band/label id ([my_bands](https://bandcamp.com/developer/account)) — not the same as Client ID |
    | `BANDCAMP_MEMBER_BAND_ID` | Optional; filter when calling as a label |
    | `BANDCAMP_INITIAL_START_TIME` | First poll window start if no Redis cursor (UTC) |
    | `CRON_SECRET` | Protects `GET /api/cron/bandcamp` (Vercel Cron sends `Authorization: Bearer …`) |
@@ -29,7 +30,7 @@ Node/TypeScript subscriber sync for [Vercel](https://vercel.com): polls **Bandca
 
 3. **Redis (Upstash)**
 
-   In the Vercel project: [Marketplace](https://vercel.com/marketplace?category=storage) → add **Redis** (Upstash). Link it to the project so `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are set. Without Redis, the Bandcamp cursor is not persisted and each cron may reprocess from `BANDCAMP_INITIAL_START_TIME`.
+   In the Vercel project: [Marketplace](https://vercel.com/marketplace?category=storage) → add **Redis** (Upstash). Link it to the project so `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are set. Redis stores the Bandcamp **sales cursor** and **caches OAuth tokens** so Client ID + Secret do not hit `oauth_token` on every request. Without Redis, OAuth still works using an in-memory cache per server instance (less ideal).
 
 4. **Cron**
 
@@ -48,7 +49,7 @@ curl -X POST "https://<your-domain>/api/internal/backfill" \
   -d '{"start_time":"2015-01-01 00:00:00","end_time":"2026-03-31 23:59:59","advance_cursor":true}'
 ```
 
-`advance_cursor: true` (default) stores `end_time` in Redis so hourly cron continues after the backfill.
+`advance_cursor: true` (default) stores `end_time` in Redis so the scheduled cron continues after the backfill.
 
 ## Shotgun / CSV import
 
@@ -73,6 +74,6 @@ Trigger cron locally:
 curl -s "http://localhost:3000/api/cron/bandcamp" -H "Authorization: Bearer $CRON_SECRET"
 ```
 
-## Bandcamp token refresh
+## Bandcamp auth
 
-OAuth access tokens expire. Refresh via `https://bandcamp.com/oauth_token` using your client id/secret (see [Bandcamp developer docs](https://bandcamp.com/developer)). For production, add a refresh flow or rotate `BANDCAMP_ACCESS_TOKEN` in Vercel when Bandcamp issues a new token.
+Set **`BANDCAMP_CLIENT_ID`** and **`BANDCAMP_CLIENT_SECRET`** in Vercel (from Bandcamp **API Access**). The app calls `oauth_token` with `grant_type=client_credentials`, caches the access token (Redis if configured), and refreshes when it expires. You do **not** need to paste a separate `BANDCAMP_ACCESS_TOKEN` unless you prefer the legacy path.
