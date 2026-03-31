@@ -33,7 +33,7 @@ Node/TypeScript subscriber sync for [Vercel](https://vercel.com): polls **Bandca
 
 4. **Cron**
 
-   [`vercel.json`](vercel.json) schedules `GET /api/cron/bandcamp` hourly. Set `CRON_SECRET` in Vercel; [securing cron jobs](https://vercel.com/docs/cron-jobs#securing-cron-jobs) uses the same `Authorization` header.
+   [`vercel.json`](vercel.json) schedules `GET /api/cron/bandcamp` **once daily** at **15:00 UTC** (Vercel **Hobby** allows at most one cron run per day). Set `CRON_SECRET` in Vercel; [securing cron jobs](https://vercel.com/docs/cron-jobs#securing-cron-jobs) uses the same `Authorization` header. On **Pro**, you can change the schedule to hourly if you prefer.
 
 5. **Laylo**
 
