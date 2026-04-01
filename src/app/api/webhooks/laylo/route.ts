@@ -10,7 +10,7 @@ function verifyLaylo(timestamp: string, rawBody: string, signature: string): boo
   if (!secret) return false;
   const expected = createHmac("sha256", secret)
     .update(timestamp + rawBody)
-    .digest("hex");
+    .digest("base64");
   try {
     return timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
   } catch {
