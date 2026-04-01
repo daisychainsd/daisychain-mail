@@ -23,20 +23,6 @@ export async function POST(request: NextRequest) {
   const signature = request.headers.get("x-signature-256");
   const rawBody = await request.text();
 
-  // Debug: log incoming headers and computed signature (remove after debugging)
-  const secret = process.env.LAYLO_WEBHOOK_SECRET;
-  if (secret) {
-    const computedBase64 = createHmac("sha256", secret).update((timestamp ?? "") + rawBody).digest("base64");
-    const computedHex    = createHmac("sha256", secret).update((timestamp ?? "") + rawBody).digest("hex");
-    const computedBodyOnly = createHmac("sha256", secret).update(rawBody).digest("base64");
-    console.log("[laylo-debug] timestamp header:", timestamp);
-    console.log("[laylo-debug] received signature:", signature);
-    console.log("[laylo-debug] computed base64 (ts+body):", computedBase64);
-    console.log("[laylo-debug] computed hex    (ts+body):", computedHex);
-    console.log("[laylo-debug] computed base64 (body only):", computedBodyOnly);
-    console.log("[laylo-debug] body:", rawBody.slice(0, 200));
-  }
-
   if (!timestamp || !signature || !verifyLaylo(timestamp, rawBody, signature)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
