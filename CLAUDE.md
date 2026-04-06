@@ -12,7 +12,7 @@ A subscriber sync service that automatically moves fan emails from Daisy Chain's
 - **Laylo → Beehiiv**: A live webhook endpoint receives every fan sign-up event from Laylo (HMAC-SHA256 verified) and subscribes the email in real time.
 - **Shotgun → Beehiiv**: A daily cron job (16:00 UTC) calls the Shotgun Tickets API, fetches all ticket orders since the last run using a cursor stored in Redis, and subscribes buyer emails to Beehiiv.
 - **CSV import scripts**: Standalone local scripts for one-time historical imports. Deduplication is safe to re-run — Beehiiv treats existing subscribers as a no-op.
-- **Cursor persistence**: After each Bandcamp run, the end-time is stored in Redis (Upstash) so the next run starts from the last processed sale.
+- **Cursor persistence**: After each Bandcamp and Shotgun run, the cursor is stored in Redis (Upstash) so the next run only fetches new records.
 
 ## Subscriber counts (as of Apr 2026 initial import)
 
@@ -20,8 +20,7 @@ A subscriber sync service that automatically moves fan emails from Daisy Chain's
 |--------|--------------------------|
 | Bandcamp (historical Aug 2024 – Mar 2026) | ~1,275 |
 | Laylo (historical full export) | ~1,863 unique |
-| Shotgun (historical audience CSV) | ~2,205 (duplicates handled by Beehiiv) |
-| Shotgun (API backfill — run backfill-shotgun.mjs) | pending |
+| Shotgun (historical audience CSV + API backfill) | ~2,182 unique via API (duplicates handled by Beehiiv) |
 
 ## Architecture
 
@@ -126,14 +125,8 @@ Both scripts skip rows with no email, deduplicate, throttle at 300ms/request, an
 
 ## Remaining to-do
 
-- **Shotgun historical backfill** — issue token in Shotgun → Settings → Integrations → Shotgun APIs, then run:
-  ```bash
-  SHOTGUN_API_TOKEN=xxx SHOTGUN_ORGANIZER_ID=216831 \
-  BEEHIIV_API_KEY=xxx BEEHIIV_PUBLICATION_ID=pub_xxx \
-    node scripts/backfill-shotgun.mjs
-  ```
-- **Add Vercel env vars** — `SHOTGUN_API_TOKEN`, `SHOTGUN_ORGANIZER_ID=216831`, `SHOTGUN_INITIAL_AFTER=<today ISO>` then redeploy
 - **Bandcamp before August 2024** — if older sales exist, add an earlier window to `scripts/backfill-local.mjs` and re-run
+- **Shotgun token expiry** — the Shotgun API token may expire. If the cron starts failing, go to Shotgun → Settings → Integrations → Shotgun APIs → Issue token, update `SHOTGUN_API_TOKEN` in Vercel, and redeploy
 
 ## Future ideas
 
