@@ -4,12 +4,13 @@
 
 A subscriber sync service that automatically moves fan emails from Daisy Chain's platforms into Beehiiv (the newsletter). Built with Next.js (App Router), deployed on Vercel.
 
-**Laylo is the central hub** — all ticket sales (Shotgun), merch, RSVPs, and website signups flow into Laylo first, then into this service via webhook. Bandcamp is the only platform that feeds directly (bypassing Laylo).
+**Laylo** handles RSVPs and fan signups via live webhook. **Shotgun** is integrated directly via the Tickets API (daily cron). **Bandcamp** feeds directly via sales API (daily cron).
 
 ## What it does today
 
 - **Bandcamp → Beehiiv**: A daily cron job (15:00 UTC) calls the Bandcamp sales API, pulls buyer emails since the last run, and subscribes them to Beehiiv. OAuth tokens are fetched automatically from Client ID + Secret and cached in Redis.
-- **Laylo → Beehiiv**: A live webhook endpoint receives every fan sign-up event from Laylo (HMAC-SHA256 verified) and subscribes the email in real time. Covers all downstream sources: Shotgun tickets, website signups, RSVPs, and any future platform connected to Laylo.
+- **Laylo → Beehiiv**: A live webhook endpoint receives every fan sign-up event from Laylo (HMAC-SHA256 verified) and subscribes the email in real time.
+- **Shotgun → Beehiiv**: A daily cron job (16:00 UTC) calls the Shotgun Tickets API, fetches all ticket orders since the last run using a cursor stored in Redis, and subscribes buyer emails to Beehiiv.
 - **CSV import scripts**: Standalone local scripts for one-time historical imports. Deduplication is safe to re-run — Beehiiv treats existing subscribers as a no-op.
 - **Cursor persistence**: After each Bandcamp run, the end-time is stored in Redis (Upstash) so the next run starts from the last processed sale.
 
@@ -20,6 +21,7 @@ A subscriber sync service that automatically moves fan emails from Daisy Chain's
 | Bandcamp (historical Aug 2024 – Mar 2026) | ~1,275 |
 | Laylo (historical full export) | ~1,863 unique |
 | Shotgun (historical audience CSV) | ~2,205 (duplicates handled by Beehiiv) |
+| Shotgun (API backfill — run backfill-shotgun.mjs) | pending |
 
 ## Architecture
 
@@ -31,7 +33,14 @@ Vercel Cron (daily 15:00 UTC)
        ├─ processBandcamp.ts → throttled subscribe loop (300ms/req)
        └─ subscribe.ts     → beehiiv.ts → POST /v2/publications/{id}/subscriptions
 
-Laylo webhook (real-time, all sources)
+Vercel Cron (daily 16:00 UTC)
+  └─ GET /api/cron/shotgun
+       ├─ Redis: get shotgun:last_after cursor
+       ├─ shotgun.ts → GET api.shotgun.live/tickets (paginated)
+       ├─ processShotgun.ts → throttled subscribe loop (300ms/req)
+       └─ subscribe.ts → beehiiv.ts → POST /v2/publications/{id}/subscriptions
+
+Laylo webhook (real-time)
   └─ POST /api/webhooks/laylo
        ├─ verify HMAC-SHA256 (X-Laylo-Timestamp + X-Signature-256)
        └─ extractEmail.ts → subscribe.ts → beehiiv.ts
@@ -55,6 +64,9 @@ CSV import (one-time historical, run locally)
 | `CRON_SECRET` | Protects `GET /api/cron/bandcamp` |
 | `INTERNAL_SECRET` | Protects `/api/internal/*` routes |
 | `LAYLO_WEBHOOK_SECRET` | Laylo-generated secret for HMAC-SHA256 webhook verification |
+| `SHOTGUN_API_TOKEN` | Shotgun API token (Settings → Integrations → Shotgun APIs → Issue token) |
+| `SHOTGUN_ORGANIZER_ID` | `216831` |
+| `SHOTGUN_INITIAL_AFTER` | ISO datetime cursor for first cron run (set to today after running backfill) |
 | `UPSTASH_REDIS_REST_URL` | Upstash Redis (cursor + token cache) |
 | `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis token |
 
@@ -62,7 +74,8 @@ CSV import (one-time historical, run locally)
 
 | Route | Method | Auth | Purpose |
 |-------|--------|------|---------|
-| `/api/cron/bandcamp` | GET | `CRON_SECRET` | Daily Bandcamp sync |
+| `/api/cron/bandcamp` | GET | `CRON_SECRET` | Daily Bandcamp sync (15:00 UTC) |
+| `/api/cron/shotgun` | GET | `CRON_SECRET` | Daily Shotgun ticket sync (16:00 UTC) |
 | `/api/webhooks/laylo` | POST | HMAC-SHA256 | Real-time Laylo fan signups |
 | `/api/internal/backfill` | POST | `INTERNAL_SECRET` | Trigger Bandcamp backfill for a date window |
 | `/api/internal/import-csv` | POST | `INTERNAL_SECRET` | Bulk import from a CSV file body |
@@ -74,6 +87,7 @@ src/
   app/
     api/
       cron/bandcamp/route.ts       — daily Bandcamp cron handler
+      cron/shotgun/route.ts        — daily Shotgun cron handler
       webhooks/laylo/route.ts      — Laylo webhook handler (HMAC-SHA256 verified)
       internal/backfill/route.ts   — admin: Bandcamp backfill by date range
       internal/import-csv/route.ts — admin: CSV bulk import
@@ -84,11 +98,14 @@ src/
     extractEmail.ts    — Extract email from unknown webhook payload shape
     normalize.ts       — Trim + lowercase email, reject invalid
     processBandcamp.ts — Loop sales report, throttle, subscribe
+    processShotgun.ts  — Loop ticket results, throttle, subscribe
+    shotgun.ts         — Shotgun Tickets API client (paginated)
     state.ts           — Redis cursor read/write
     subscribe.ts       — normalise → Beehiiv (shared by all sources)
     auth.ts            — Bearer token check helper
 scripts/
   backfill-local.mjs      — historical Bandcamp import (chunked date windows)
+  backfill-shotgun.mjs    — historical Shotgun import via API (all tickets ever)
   import-laylo-csv.mjs    — historical Laylo fan CSV import
   import-shotgun-csv.mjs  — historical Shotgun audience CSV import
 ```
@@ -109,7 +126,13 @@ Both scripts skip rows with no email, deduplicate, throttle at 300ms/request, an
 
 ## Remaining to-do
 
-- **Verify Shotgun CSV fully completed** — check terminal output for final `subscribed / failed` count
+- **Shotgun historical backfill** — issue token in Shotgun → Settings → Integrations → Shotgun APIs, then run:
+  ```bash
+  SHOTGUN_API_TOKEN=xxx SHOTGUN_ORGANIZER_ID=216831 \
+  BEEHIIV_API_KEY=xxx BEEHIIV_PUBLICATION_ID=pub_xxx \
+    node scripts/backfill-shotgun.mjs
+  ```
+- **Add Vercel env vars** — `SHOTGUN_API_TOKEN`, `SHOTGUN_ORGANIZER_ID=216831`, `SHOTGUN_INITIAL_AFTER=<today ISO>` then redeploy
 - **Bandcamp before August 2024** — if older sales exist, add an earlier window to `scripts/backfill-local.mjs` and re-run
 
 ## Future ideas

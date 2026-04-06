@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/bandcamp",
       "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/shotgun",
+      "schedule": "0 16 * * *"
     }
   ]
 }
