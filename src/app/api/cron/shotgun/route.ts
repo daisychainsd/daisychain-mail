@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { processShotgunTickets } from "@/lib/processShotgun";
 import {
   getShotgunLastAfter,
-  setShotgunLastAfter,
   redisConfigured,
 } from "@/lib/state";
 import { bearerMatches } from "@/lib/auth";
@@ -32,10 +31,6 @@ export async function GET(request: NextRequest) {
   const after = stored ?? process.env.SHOTGUN_INITIAL_AFTER ?? undefined;
 
   const result = await processShotgunTickets(token, organizerId, after);
-
-  if (result.nextCursor) {
-    await setShotgunLastAfter(result.nextCursor);
-  }
 
   const response = {
     ok: true,
