@@ -4,6 +4,8 @@ import { subscribeWithSource } from "./subscribe";
 export type ProcessBandcampResult = {
   lineItems: number;
   subscribed: number;
+  newSubscribers: number;
+  existingSubscribers: number;
   skippedNoEmail: number;
   failed: number;
   errors: string[];
@@ -29,6 +31,8 @@ export async function processBandcampSalesWindow(
   const result: ProcessBandcampResult = {
     lineItems: report.length,
     subscribed: 0,
+    newSubscribers: 0,
+    existingSubscribers: 0,
     skippedNoEmail: 0,
     failed: 0,
     errors: [],
@@ -42,12 +46,16 @@ export async function processBandcampSalesWindow(
       continue;
     }
 
-    // throttle: 300ms between calls (~3 req/s, well under Beehiiv limits)
-    if (i > 0) await sleep(300);
+    if (i > 0) await sleep(100);
 
     const sub = await subscribeWithSource(email, "bandcamp");
     if (sub.ok) {
       result.subscribed += 1;
+      if (sub.existing) {
+        result.existingSubscribers += 1;
+      } else {
+        result.newSubscribers += 1;
+      }
     } else {
       result.failed += 1;
       if (result.errors.length < 20) {

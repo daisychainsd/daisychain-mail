@@ -8,6 +8,7 @@ import {
   redisConfigured,
 } from "@/lib/state";
 import { bearerMatches } from "@/lib/auth";
+import { notifyCronFailure } from "@/lib/notify";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -29,11 +30,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "missing BANDCAMP_BAND_ID" }, { status: 500 });
   }
 
+  try {
   let token: string;
   try {
     token = await getBandcampAccessToken();
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    await notifyCronFailure("bandcamp", { error: "bandcamp_auth_failed", detail: msg }).catch(() => {});
     return NextResponse.json(
       { error: "bandcamp_auth_failed", detail: msg },
       { status: 500 }
@@ -72,11 +75,13 @@ export async function GET(request: NextRequest) {
 
   await setBandcampLastEndTime(endStr);
 
-  return NextResponse.json({
+  const response = {
     ok: true,
     window: { start_time: startStr, end_time: endStr },
     lineItems: result.lineItems,
     subscribed: result.subscribed,
+    newSubscribers: result.newSubscribers,
+    existingSubscribers: result.existingSubscribers,
     skippedNoEmail: result.skippedNoEmail,
     failed: result.failed,
     errors: result.errors,
@@ -84,5 +89,17 @@ export async function GET(request: NextRequest) {
     warning: redisConfigured()
       ? undefined
       : "Redis not configured: cursor not persisted across deploys; add Upstash Redis from Vercel Marketplace (UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN).",
-  });
+  };
+
+  if (result.failed > 0) {
+    await notifyCronFailure("bandcamp", response).catch(() => {});
+  }
+
+  return NextResponse.json(response);
+
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await notifyCronFailure("bandcamp", { error: message }).catch(() => {});
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  }
 }

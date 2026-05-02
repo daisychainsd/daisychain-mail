@@ -4,7 +4,7 @@ import { normalizeEmail } from "./normalize";
 export async function subscribeWithSource(
   rawEmail: string,
   source: string
-): Promise<{ ok: true } | { ok: false; reason: string }> {
+): Promise<{ ok: true; existing: boolean } | { ok: false; reason: string }> {
   const email = normalizeEmail(rawEmail);
   if (!email) return { ok: false, reason: "invalid_email" };
 
@@ -19,6 +19,6 @@ export async function subscribeWithSource(
     utm_medium: "daisychain-mail",
   });
 
-  if (result.ok) return { ok: true };
+  if (result.ok) return { ok: true, existing: result.existing };
   return { ok: false, reason: `beehiiv_${result.status}: ${result.body}` };
 }

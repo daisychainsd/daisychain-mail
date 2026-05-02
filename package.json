@@ -1,5 +1,5 @@
 {
-  "name": "daisychain-mail",
+  "name": "dc-email-api",
   "private": true,
   "scripts": {
     "dev": "next dev",

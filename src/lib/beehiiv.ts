@@ -1,7 +1,7 @@
 const BEEHIIV_API = "https://api.beehiiv.com/v2";
 
 export type SubscribeResult =
-  | { ok: true; status: number }
+  | { ok: true; status: number; existing: boolean }
   | { ok: false; status: number; body: string };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -28,7 +28,7 @@ async function createSubscriptionOnce(
   });
 
   const text = await res.text();
-  if (res.ok) return { ok: true, status: res.status };
+  if (res.ok) return { ok: true, status: res.status, existing: false };
 
   const lower = text.toLowerCase();
   if (
@@ -37,7 +37,7 @@ async function createSubscriptionOnce(
     lower.includes("already") ||
     lower.includes("exist")
   ) {
-    return { ok: true, status: res.status };
+    return { ok: true, status: res.status, existing: true };
   }
 
   return { ok: false, status: res.status, body: text };
