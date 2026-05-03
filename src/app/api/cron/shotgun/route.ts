@@ -49,7 +49,8 @@ export async function GET(request: NextRequest) {
       : "Redis not configured: cursor not persisted. Add Upstash Redis from Vercel Marketplace.",
   };
 
-  if (result.failed > 0) {
+  const failRate = result.tickets > 0 ? result.failed / result.tickets : 0;
+  if (result.failed >= 5 || failRate > 0.1) {
     await notifyCronFailure("shotgun", response).catch(() => {});
   }
 

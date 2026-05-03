@@ -63,7 +63,7 @@ export async function processShotgunTickets(
         continue;
       }
 
-      if (result.subscribed > 0 || i > 0) await sleep(100);
+      if (result.subscribed > 0 || i > 0) await sleep(150);
 
       const sub = await subscribeWithSource(email, "shotgun");
       if (sub.ok) {

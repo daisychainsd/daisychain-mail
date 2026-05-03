@@ -91,7 +91,8 @@ export async function GET(request: NextRequest) {
       : "Redis not configured: cursor not persisted across deploys; add Upstash Redis from Vercel Marketplace (UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN).",
   };
 
-  if (result.failed > 0) {
+  const failRate = result.lineItems > 0 ? result.failed / result.lineItems : 0;
+  if (result.failed >= 5 || failRate > 0.1) {
     await notifyCronFailure("bandcamp", response).catch(() => {});
   }
 
