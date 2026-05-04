@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { extractEmailFromUnknown } from "@/lib/extractEmail";
 import { subscribeWithSource } from "@/lib/subscribe";
+import { setLayloLastWebhook } from "@/lib/state";
 
 export const runtime = "nodejs";
 
@@ -46,6 +47,8 @@ export async function POST(request: NextRequest) {
   if (!sub.ok) {
     return NextResponse.json({ ok: false, reason: sub.reason }, { status: 502 });
   }
+
+  await setLayloLastWebhook().catch(() => {});
 
   return NextResponse.json({ ok: true });
 }

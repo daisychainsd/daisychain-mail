@@ -18,8 +18,18 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 type ShotgunTicket = { contact_email: string | null; ordered_at: string | null };
 type ShotgunPage = { pagination: { next?: string }; data: ShotgunTicket[] };
 
+export class ShotgunAuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ShotgunAuthError";
+  }
+}
+
 async function fetchPage(url: string, token: string): Promise<ShotgunPage> {
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (res.status === 401) {
+    throw new ShotgunAuthError("Shotgun API returned 401 — token expired");
+  }
   if (!res.ok) throw new Error(`Shotgun API error ${res.status}: ${await res.text()}`);
   return res.json();
 }
