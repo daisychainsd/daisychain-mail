@@ -41,6 +41,18 @@ async function writeBundle(bundle: OAuthBundle): Promise<void> {
   }
 }
 
+async function clearBundle(): Promise<void> {
+  const r = getRedis();
+  if (!r) return;
+  try {
+    await r.del(OAUTH_CACHE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 let memoryBundle: OAuthBundle | null = null;
 
 function bundleValid(b: OAuthBundle | null): boolean {
@@ -99,11 +111,30 @@ async function fetchWithClientCredentials(): Promise<OAuthBundle> {
     throw new Error("BANDCAMP_CLIENT_ID and BANDCAMP_CLIENT_SECRET are required");
   }
 
-  return postToken({
+  const body = {
     grant_type: "client_credentials",
     client_id,
     client_secret,
-  });
+  };
+
+  // Bandcamp returns "duplicate_grant" when old grants haven't been cleaned up yet.
+  // Retry a few times with delay to let them expire.
+  const maxAttempts = 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await postToken(body);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("duplicate_grant") && attempt < maxAttempts - 1) {
+        await sleep(5000 * (attempt + 1));
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  // unreachable, but satisfies TS
+  throw new Error("fetchWithClientCredentials: exhausted retries");
 }
 
 async function fetchWithRefreshToken(refresh_token: string): Promise<OAuthBundle> {
@@ -150,7 +181,9 @@ export async function getBandcampAccessToken(): Promise<string> {
       await writeBundle(refreshed);
       return refreshed.access_token;
     } catch {
-      // fall through to client_credentials
+      // Clear stale bundle so we don't keep retrying a dead refresh token
+      await clearBundle();
+      memoryBundle = null;
     }
   }
 

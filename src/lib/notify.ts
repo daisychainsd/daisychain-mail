@@ -56,7 +56,7 @@ export async function notifyLayloSilent(daysSince: number): Promise<void> {
       `This could mean:<br>` +
       `- The Laylo webhook URL was changed or disabled in Laylo settings<br>` +
       `- Laylo is down or their webhook delivery is broken<br>` +
-      `- No new fan signups happened (unlikely over 7 days)<br><br>` +
+      `- No new fan signups happened (Laylo is a low-volume channel, so this is plausible)<br><br>` +
       `<strong>To check:</strong> Go to <a href="https://laylo.com">Laylo</a> → Settings → Webhooks and verify the endpoint URL is still <code>https://dc-email-api.vercel.app/api/webhooks/laylo</code>`
   );
 }

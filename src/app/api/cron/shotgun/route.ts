@@ -15,7 +15,9 @@ import { notifyCronFailure, notifyTokenExpired, notifyLayloSilent } from "@/lib/
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-const LAYLO_SILENCE_DAYS = 7;
+// Laylo is a low-volume channel (~1 signup every 1-2 weeks), so use a wider
+// silence window to avoid false alarms during normal quiet stretches.
+const LAYLO_SILENCE_DAYS = 21;
 
 async function checkLayloSilence(): Promise<void> {
   const lastWebhook = await getLayloLastWebhook();
