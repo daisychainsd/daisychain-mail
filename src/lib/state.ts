@@ -119,6 +119,17 @@ export async function setShotgunTokenAlerted(): Promise<void> {
   }
 }
 
+export async function pingRedis(): Promise<boolean> {
+  const r = getRedis();
+  if (!r) return false;
+  try {
+    await r.ping();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function redisConfigured(): boolean {
   return Boolean(
     process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
